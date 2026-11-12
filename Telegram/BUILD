@@ -1936,8 +1936,8 @@ plist_fragment(
     <true/>
     <key>NSAppTransportSecurity</key>
     <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
+        <!-- HARDENED_BUILD: ATS enforced --><key>NSAllowsArbitraryLoads</key>
+        <false/>
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>We need this so that you can take and share photos and videos.</string>

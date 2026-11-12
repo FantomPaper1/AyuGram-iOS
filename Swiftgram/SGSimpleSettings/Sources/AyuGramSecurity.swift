@@ -235,14 +235,14 @@ public final class AyuGramSecurity {
         })
     }
 
+    // HARDENED_BUILD: remote moderation cannot block the client.
     public var isBlocked: Bool {
-        self.lock.lock()
-        defer { self.lock.unlock() }
-        return self.rules.matches(teamId: self.signing.teamId, build: self.build, status: self.currentStatus) || UserDefaults.standard.bool(forKey: self.banKey) || UserDefaults.standard.bool(forKey: self.flagsKey)
+        return false
     }
 
+    // HARDENED_BUILD: remote moderation cannot ban the client.
     public var isBanned: Bool {
-        return UserDefaults.standard.bool(forKey: self.banKey)
+        return false
     }
 
     public static let reasonCodes: Set<String> = ["scam", "resale", "abuse", "testflight", "modified", "fork"]
@@ -276,17 +276,9 @@ public final class AyuGramSecurity {
         return UserDefaults.standard.stringArray(forKey: self.accountsKey) ?? []
     }
 
+    // HARDENED_BUILD: account ids are never hashed or retained.
     public func noteAccount(_ id: Int64) {
-        guard id != 0 else {
-            return
-        }
-        let hash = AyuGramSecurity.accountHash(id)
-        var hashes = self.accountHashes
-        if hashes.contains(hash) {
-            return
-        }
-        hashes.append(hash)
-        UserDefaults.standard.set(Array(hashes.suffix(8)), forKey: self.accountsKey)
+        _ = id
     }
 
     public func acknowledgeWarning() {
@@ -337,55 +329,9 @@ public final class AyuGramSecurity {
         return body
     }
 
+    // HARDENED_BUILD: the moderation endpoint is never contacted.
     public func refreshModeration(force: Bool = false) {
-        self.lock.lock()
-        if !force, let last = self.lastModerationCheck, Date().timeIntervalSince(last) < 600.0 {
-            self.lock.unlock()
-            return
-        }
-        self.lastModerationCheck = Date()
-        self.lock.unlock()
-        guard let url = URL(string: AyuGramSecurity.relayURL + "/stats/status"), let body = try? JSONSerialization.data(withJSONObject: self.checkPayload()) else {
-            return
-        }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20.0)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        let session = URLSession(configuration: .ephemeral)
-        session.dataTask(with: request, completionHandler: { data, response, error in
-            session.finishTasksAndInvalidate()
-            guard error == nil, (response as? HTTPURLResponse)?.statusCode == 200, let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return
-            }
-            let banned = (object["banned"] as? Bool) ?? false
-            var changed = UserDefaults.standard.bool(forKey: self.banKey) != banned
-            UserDefaults.standard.set(banned, forKey: self.banKey)
-            if let blocked = object["blocked"] as? Bool {
-                if UserDefaults.standard.bool(forKey: self.flagsKey) != blocked {
-                    changed = true
-                }
-                UserDefaults.standard.set(blocked, forKey: self.flagsKey)
-            }
-            for (field, key) in [("banReason", self.banReasonKey), ("blockReason", self.blockReasonKey)] {
-                let reason = object[field] as? String
-                if UserDefaults.standard.string(forKey: key) != reason {
-                    changed = true
-                    UserDefaults.standard.set(reason, forKey: key)
-                }
-            }
-            if let warning = object["warning"] as? String, !warning.isEmpty, warning != UserDefaults.standard.string(forKey: self.warningSeenKey) {
-                self.lock.lock()
-                if self.currentWarning != warning {
-                    self.currentWarning = warning
-                    changed = true
-                }
-                self.lock.unlock()
-            }
-            if changed {
-                self.notify()
-            }
-        }).resume()
+        _ = force
     }
 
     public var blockMessage: String? {
@@ -403,17 +349,12 @@ public final class AyuGramSecurity {
         return value
     }
 
+    // HARDENED_BUILD: remote block lists are ignored.
     public func applyManifest(_ data: Data) {
-        let parsed = AyuGramBlockRules.parse(data)
-        self.lock.lock()
-        let changed = parsed != self.rules
-        self.rules = parsed
-        self.lock.unlock()
-        if changed {
-            self.notify()
-        }
+        _ = data
     }
 
+    // HARDENED_BUILD: no integrity download, no moderation request, no install id.
     public func start(variant: String, statsEnabled: @escaping () -> Bool) {
         self.lock.lock()
         if self.started {
@@ -422,82 +363,32 @@ public final class AyuGramSecurity {
         }
         self.started = true
         self.currentVariant = variant
+        self.currentStatus = .unknown
         self.lock.unlock()
-        let variants = variant == "custom" ? ["custom", "standard"] : ["standard", "custom"]
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3.0, execute: {
-            let local = AyuGramSecurity.localFingerprint()
-            self.verify(local: local, variants: variants, completion: { status in
-                self.setStatus(status)
-                self.refreshModeration(force: true)
-                if statsEnabled() {
-                    self.sendStats(variant: variant)
-                }
-            })
-        })
+        _ = statsEnabled
     }
 
+    // HARDENED_BUILD: telemetry is compiled out.
     public func sendStats(variant: String) {
-        let day = Int(Date().timeIntervalSince1970 / 86400.0)
-        let marker = "\(self.build)|\(day)|\(self.status.rawValue)|\(self.accountHashes.joined(separator: ","))"
-        if UserDefaults.standard.string(forKey: self.statsMarkerKey) == marker {
-            return
-        }
-        self.post(path: "/stats/ping", body: self.payload(variant: variant), completion: { ok in
-            if ok {
-                UserDefaults.standard.set(marker, forKey: self.statsMarkerKey)
-            }
-        })
+        _ = variant
     }
 
+    // HARDENED_BUILD: scam reports never leave the device.
     public func report(text: String, target: Int64, targetName: String, attachments: Int, variant: String, completion: @escaping (Bool, AyuGramReportTicket?) -> Void) {
-        var body = self.payload(variant: variant)
-        body["text"] = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(600))
-        if target != 0 {
-            body["target"] = String(target)
-        }
-        if !targetName.isEmpty {
-            body["targetName"] = String(targetName.prefix(160))
-        }
-        body["attachments"] = attachments
-        guard let url = URL(string: AyuGramSecurity.relayURL + "/stats/report"), let data = try? JSONSerialization.data(withJSONObject: body) else {
-            completion(false, nil)
-            return
-        }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20.0)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = data
-        let session = URLSession(configuration: .ephemeral)
-        session.dataTask(with: request, completionHandler: { data, response, error in
-            session.finishTasksAndInvalidate()
-            let ok = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
-            var ticket: AyuGramReportTicket?
-            if ok, let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let rid = object["rid"] as? String, let token = object["token"] as? String {
-                ticket = AyuGramReportTicket(rid: rid, token: token)
-            }
-            DispatchQueue.main.async {
-                completion(ok, ticket)
-            }
-        }).resume()
+        _ = text
+        _ = target
+        _ = targetName
+        _ = attachments
+        _ = variant
+        completion(false, nil)
     }
 
+    // HARDENED_BUILD: report attachments never leave the device.
     public func attach(ticket: AyuGramReportTicket, data: Data, contentType: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: AyuGramSecurity.relayURL + "/stats/attach/" + ticket.rid) else {
-            completion(false)
-            return
-        }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 120.0)
-        request.httpMethod = "POST"
-        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        request.setValue(ticket.token, forHTTPHeaderField: "X-AyuGram-Token")
-        let session = URLSession(configuration: .ephemeral)
-        session.uploadTask(with: request, from: data, completionHandler: { _, response, error in
-            session.finishTasksAndInvalidate()
-            let ok = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
-            DispatchQueue.main.async {
-                completion(ok)
-            }
-        }).resume()
+        _ = ticket
+        _ = data
+        _ = contentType
+        completion(false)
     }
 
     private func setStatus(_ status: AyuGramBuildStatus) {
@@ -537,50 +428,18 @@ public final class AyuGramSecurity {
         ]
     }
 
+    // HARDENED_BUILD: defence in depth: no generic POST helper remains.
     private func post(path: String, body: [String: Any], completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: AyuGramSecurity.relayURL + path), let data = try? JSONSerialization.data(withJSONObject: body) else {
-            completion(false)
-            return
-        }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20.0)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = data
-        let session = URLSession(configuration: .ephemeral)
-        session.dataTask(with: request, completionHandler: { _, response, error in
-            session.finishTasksAndInvalidate()
-            completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-        }).resume()
+        _ = path
+        _ = body
+        completion(false)
     }
 
+    // HARDENED_BUILD: code fingerprints are no longer fetched from GitHub.
     private func verify(local: [String: String], variants: [String], completion: @escaping (AyuGramBuildStatus) -> Void) {
-        guard let variant = variants.first else {
-            completion(.modified)
-            return
-        }
-        let build = self.build
-        if let origin = self.origin, origin.build != self.plistBuild {
-            completion(.modified)
-            return
-        }
-        guard build > 0, let url = URL(string: "\(AyuGramSecurity.releaseURL)\(build)/AyuGram-\(variant)-\(build).integrity.json") else {
-            completion(.modified)
-            return
-        }
-        let session = URLSession(configuration: .ephemeral)
-        session.dataTask(with: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20.0), completionHandler: { data, response, error in
-            session.finishTasksAndInvalidate()
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if error != nil || (code != 200 && code != 404) {
-                completion(.unknown)
-                return
-            }
-            if code == 200, let data, data.count < 262144, let remote = AyuGramSecurity.parseFingerprint(data, build: build), AyuGramSecurity.compare(local: local, remote: remote) == .official {
-                completion(.official)
-                return
-            }
-            self.verify(local: local, variants: Array(variants.dropFirst()), completion: completion)
-        }).resume()
+        _ = local
+        _ = variants
+        completion(.unknown)
     }
 
     public static func parseFingerprint(_ data: Data, build: Int) -> [String: String]? {

@@ -60,29 +60,8 @@ public final class AyuGramUpdates {
         return info
     }
 
+    // HARDENED_BUILD: the update manifest and its block list are never downloaded.
     public func check(completion: @escaping (AyuGramUpdateInfo?) -> Void) {
-        var request = URLRequest(url: Self.manifestURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        request.httpMethod = "GET"
-        let session = URLSession(configuration: .ephemeral)
-        let current = currentBuild
-        session.dataTask(with: request) { [weak self] data, response, _ in
-            var info: AyuGramUpdateInfo?
-            if let data, data.count <= 16384, (response as? HTTPURLResponse)?.statusCode == 200 {
-                info = Self.parse(data, currentBuild: current)
-                Self.manifestObserver?(data)
-            }
-            session.finishTasksAndInvalidate()
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.lock.lock()
-                let changed = self.available != info
-                self.available = info
-                self.lock.unlock()
-                if changed {
-                    NotificationCenter.default.post(name: Self.didChange, object: self)
-                }
-                completion(info)
-            }
-        }.resume()
+        completion(nil)
     }
 }

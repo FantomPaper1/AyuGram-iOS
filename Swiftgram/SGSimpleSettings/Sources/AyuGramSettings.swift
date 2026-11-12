@@ -182,7 +182,8 @@ public struct AyuGramExtraSettings: Codable, Equatable {
     public var confirmGifs = false
     public var confirmReadReceipt = true
     /// Daily anonymous ping with the build, install source and signing certificate.
-    public var anonymousStats = true
+    // HARDENED_BUILD: telemetry is off even if some old UI entry survives.
+    public var anonymousStats = false
     /// Keeps the app running in the background with silent audio and posts local notifications: 0 off, -1 always, else minutes after leaving the app.
 
     public var sendsSilently: Bool {

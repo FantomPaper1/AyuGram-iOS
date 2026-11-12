@@ -64,29 +64,9 @@ public class SGLocalizationManager {
         return dictionary
     }
     
+    // HARDENED_BUILD: localization files are never downloaded from GitHub.
     public func downloadLocale(_ locale: String) {
-        #if DEBUG
-        SGLogger.shared.log("Strings", "DEBUG ignoring locale download: \(locale)")
-        if ({ return true }()) {
-            return
-        }
-        #endif
-        let sanitizedLocale = self.sanitizeLocale(locale)
-        guard let url = URL(string: self.getStringsUrl(for: sanitizedLocale)) else {
-            SGLogger.shared.log("Strings", "Invalid URL for locale: \(sanitizedLocale)")
-            return
-        }
-        
-        DispatchQueue.global(qos: .background).async {
-            if let localeDict = NSDictionary(contentsOf: url) as? [String: String] {
-                DispatchQueue.main.async {
-                    self.webLocalizations[sanitizedLocale] = localeDict
-                    SGLogger.shared.log("Strings", "Successfully downloaded locale \(sanitizedLocale)")
-                }
-            } else {
-                SGLogger.shared.log("Strings", "Failed to download \(sanitizedLocale)")
-            }
-        }
+        _ = locale
     }
     
     private func sanitizeLocale(_ locale: String) -> String {

@@ -116,67 +116,11 @@ enum AyuGramPushRelay {
 
     /// Saves the Bark key ("" turns notifications off) and subscribes every logged-in account.
     /// Completes with Telegram's error, if any.
+    // HARDENED_BUILD: Bark subscriptions are disabled.
     static func apply(context: AccountContext, barkKey: String, completion: @escaping (String?) -> Void) {
-        let previous = UserDefaults.standard.string(forKey: subscriptionDefaultsKey)
-        let previousKey = UserDefaults.standard.string(forKey: barkKeyDefaultsKey)
-        let current = barkKey.isEmpty ? nil : subscription(barkKey: barkKey)
-        if barkKey.isEmpty {
-            UserDefaults.standard.removeObject(forKey: barkKeyDefaultsKey)
-            UserDefaults.standard.removeObject(forKey: subscriptionDefaultsKey)
-        } else {
-            UserDefaults.standard.set(barkKey, forKey: barkKeyDefaultsKey)
-            UserDefaults.standard.set(current, forKey: subscriptionDefaultsKey)
-        }
-        let _ = (engines(context: context)
-        |> mapToSignal { engines -> Signal<String?, NoError> in
-            if engines.isEmpty {
-                return .single(nil)
-            }
-            var requests: [Signal<String?, NoError>] = []
-            for engine in engines {
-                let account = engine.account.peerId
-                var stale: [String] = []
-                if let previous {
-                    stale.append(previous)
-                }
-                if let previousKey, !previousKey.isEmpty, previousKey != barkKey {
-                    stale.append(subscription(barkKey: previousKey, account: account))
-                }
-                if current != nil {
-                    stale.append(subscription(barkKey: barkKey))
-                }
-                var request: Signal<String?, NoError> = .single(nil)
-                for old in Set(stale) {
-                    request = request
-                    |> take(1)
-                    |> mapToSignal { _ -> Signal<String?, NoError> in
-                        return engine.accountData.ayuUnregisterWebPush(subscription: old)
-                        |> map { _ -> String? in
-                            return nil
-                        }
-                        |> take(1)
-                    }
-                }
-                if current != nil {
-                    let tagged = subscription(barkKey: barkKey, account: account)
-                    request = request
-                    |> take(1)
-                    |> mapToSignal { _ -> Signal<String?, NoError> in
-                        return engine.accountData.ayuRegisterWebPush(subscription: tagged)
-                    }
-                }
-                requests.append(request |> take(1))
-            }
-            return combineLatest(requests)
-            |> map { errors -> String? in
-                return errors.compactMap { $0 }.first
-            }
-        }
-        |> take(1)
-        |> deliverOnMainQueue).startStandalone(next: { error in
-            completion(error)
-            updateActivity()
-        })
+        _ = context
+        _ = barkKey
+        completion(nil)
     }
 
     private final class BackgroundTask {
@@ -189,80 +133,9 @@ enum AyuGramPushRelay {
     private static let activitySeconds = 90
     private static let activityInterval: TimeInterval = 45.0
 
+    // HARDENED_BUILD: the third-party push relay is never registered or renewed.
     static func renew(context: AccountContext) {
-        collectContext = context
-        if let barkKey, !barkKey.isEmpty {
-            let legacy = subscription(barkKey: barkKey)
-            let migrated = UserDefaults.standard.bool(forKey: taggedDefaultsKey)
-            let _ = (engines(context: context)
-            |> mapToSignal { engines -> Signal<Void, NoError> in
-                if engines.isEmpty {
-                    return .single(Void())
-                }
-                return combineLatest(engines.map { engine -> Signal<Void, NoError> in
-                    let tagged = subscription(barkKey: barkKey, account: engine.account.peerId)
-                    let cleanup: Signal<Void, NoError> = migrated ? .single(Void()) : (engine.accountData.ayuUnregisterWebPush(subscription: legacy)
-                    |> map { _ -> Void in
-                        return Void()
-                    }
-                    |> take(1))
-                    return cleanup
-                    |> mapToSignal { _ -> Signal<Void, NoError> in
-                        return engine.accountData.ayuRegisterWebPush(subscription: tagged)
-                        |> map { _ -> Void in
-                            return Void()
-                        }
-                        |> take(1)
-                    }
-                })
-                |> afterNext { _ in
-                    UserDefaults.standard.set(true, forKey: taggedDefaultsKey)
-                }
-                |> map { _ -> Void in
-                    return Void()
-                }
-            }
-            |> take(1)).startStandalone()
-        }
-        for observer in activityObservers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        activityObservers = [
-            NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main, using: { _ in
-                updateActivity()
-                if let openChat {
-                    chatOpened(peerId: openChat)
-                }
-                Queue.mainQueue().after(2.0, {
-                    clearReadChats()
-                })
-                Queue.mainQueue().after(8.0, {
-                    collectDeleted()
-                })
-            }),
-            NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main, using: { _ in
-                updateActivity()
-            }),
-            NotificationCenter.default.addObserver(forName: Notification.Name("AyuGramChatOpened"), object: nil, queue: .main, using: { notification in
-                if let peerId = notification.userInfo?["peerId"] as? EnginePeer.Id {
-                    openChat = peerId
-                    chatOpened(peerId: peerId)
-                }
-            }),
-            NotificationCenter.default.addObserver(forName: Notification.Name("AyuGramChatClosed"), object: nil, queue: .main, using: { notification in
-                if let peerId = notification.userInfo?["peerId"] as? EnginePeer.Id, openChat == peerId {
-                    openChat = nil
-                    chatOpened(peerId: peerId)
-                }
-            })
-        ]
-        Queue.mainQueue().after(4.0, {
-            clearReadChats()
-        })
-        updateActivity()
-        Queue.mainQueue().after(10.0, {
-            collectDeleted()
-        })
+        _ = context
     }
 
     private static weak var collectContext: AccountContext?
@@ -270,41 +143,8 @@ enum AyuGramPushRelay {
     private static let ackDefaultsKey = "ayuGram.pushRelay.ack"
 
     /// Fetches messages the relay saw deleted while AyuGram was closed and keeps them.
+    // HARDENED_BUILD: deleted-message collection from the relay is disabled.
     static func collectDeleted() {
-        guard let context = collectContext, let barkKey, !barkKey.isEmpty, AyuGramSettings.shared.snapshot.messageHistory, !collecting else {
-            return
-        }
-        let ack = UserDefaults.standard.stringArray(forKey: ackDefaultsKey) ?? []
-        let json: [String: Any] = ["barkKey": barkKey, "ack": ack]
-        guard let url = URL(string: baseURL + "/deleted/" + activityId(barkKey: barkKey)), let body = try? JSONSerialization.data(withJSONObject: json) else {
-            return
-        }
-        collecting = true
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.httpBody = body
-        request.timeoutInterval = 20.0
-        URLSession.shared.dataTask(with: request, completionHandler: { data, response, _ in
-            DispatchQueue.main.async {
-                guard (response as? HTTPURLResponse)?.statusCode == 200, let data, let entries = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
-                    collecting = false
-                    return
-                }
-                UserDefaults.standard.removeObject(forKey: ackDefaultsKey)
-                let ids = entries.compactMap { $0["id"] as? String }
-                if ids.isEmpty {
-                    collecting = false
-                    return
-                }
-                keepDeleted(context: context, messages: decodeDeleted(entries), completion: {
-                    UserDefaults.standard.set(ids, forKey: ackDefaultsKey)
-                    collecting = false
-                    if ids.count >= 300 {
-                        collectDeleted()
-                    }
-                })
-            }
-        }).resume()
     }
 
     private static func base64urlDecode(_ text: String) -> Data? {
@@ -317,38 +157,8 @@ enum AyuGramPushRelay {
 
     /// Removes the notifications of chats that are read by now, or where the last message is
     /// the user's own: read on another device, or answered from anywhere.
+    // HARDENED_BUILD: relay-side notification bookkeeping is disabled.
     static func clearReadChats() {
-        guard let context = collectContext, let barkKey, !barkKey.isEmpty, let url = URL(string: baseURL + "/shown/" + activityId(barkKey: barkKey)), let body = try? JSONSerialization.data(withJSONObject: ["barkKey": barkKey]) else {
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.httpBody = body
-        request.timeoutInterval = 15.0
-        URLSession.shared.dataTask(with: request, completionHandler: { data, response, _ in
-            guard (response as? HTTPURLResponse)?.statusCode == 200, let data, let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                return
-            }
-            for entry in entries {
-                guard let chat = entry["chat"] as? String, let peerId = relayPeerId(chat: chat) else {
-                    continue
-                }
-                let maxId = (entry["maxId"] as? NSNumber)?.int32Value ?? 0
-                let _ = (context.engine.data.get(
-                    TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: peerId),
-                    TelegramEngine.EngineData.Item.Messages.TopMessage(id: peerId)
-                )
-                |> deliverOnMainQueue).startStandalone(next: { counters, topMessage in
-                    var answered = false
-                    if let topMessage, !topMessage.flags.contains(.Incoming), topMessage.id.id >= maxId {
-                        answered = true
-                    }
-                    if !counters.isUnread || answered {
-                        chatOpened(peerId: peerId)
-                    }
-                })
-            }
-        }).resume()
     }
 
     private static func relayPeerId(chat: String) -> EnginePeer.Id? {
@@ -458,25 +268,10 @@ enum AyuGramPushRelay {
         post(path: "/seen/" + activityId(barkKey: barkKey), body: body)
     }
 
+    // HARDENED_BUILD: defence in depth: no relay POST helper remains.
     private static func post(path: String, body: Data) {
-        guard let url = URL(string: baseURL + path) else {
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.httpBody = body
-        request.timeoutInterval = 15.0
-        let task = BackgroundTask()
-        let finish: () -> Void = {
-            if task.id != .invalid {
-                UIApplication.shared.endBackgroundTask(task.id)
-                task.id = .invalid
-            }
-        }
-        task.id = UIApplication.shared.beginBackgroundTask(withName: "AyuGramPushRelay", expirationHandler: finish)
-        URLSession.shared.dataTask(with: request, completionHandler: { _, _, _ in
-            DispatchQueue.main.async(execute: finish)
-        }).resume()
+        _ = path
+        _ = body
     }
 }
 

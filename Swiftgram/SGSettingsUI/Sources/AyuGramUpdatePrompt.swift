@@ -158,8 +158,6 @@ public func ayuGramPresentUpdateIfNeeded(context: AccountContext) {
     }
     AyuGramUpdates.shared.check { _ in }
     AyuGramPushRelay.renew(context: context)
-    ayuGramBarkSetupHook = { context, present in
-        ayuGramSetUpBark(context: context, present: present)
-    }
+    // HARDENED_BUILD: no Bark setup hook, so the debug/settings entry cannot subscribe.
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge], completionHandler: { _, _ in })
 }

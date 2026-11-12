@@ -9,30 +9,9 @@ import AccountContext
 import SGSimpleSettings
 import TelegramCore
 
+// HARDENED_BUILD: automatic initData upload to api.swiftgram.app is disabled.
 public func updateSGWebSettingsInteractivelly(context: AccountContext) {
-    let _ = getSGApiToken(context: context).startStandalone(next: { token in
-        let _ = getSGSettings(token: token).startStandalone(next: { webSettings in
-            SGLogger.shared.log("SGAPI", "New SGWebSettings for id \(context.account.peerId.id._internalGetInt64Value()): \(webSettings) ")
-            SGSimpleSettings.shared.canUseStealthMode = webSettings.global.storiesAvailable
-            SGSimpleSettings.shared.duckyAppIconAvailable = webSettings.global.duckyAppIconAvailable
-            SGSimpleSettings.shared.canUseNY = webSettings.global.nyAvailable
-            let _ = (context.account.postbox.transaction { transaction in
-                updateAppConfiguration(transaction: transaction, { configuration -> AppConfiguration in
-                    var configuration = configuration
-                    configuration.sgWebSettings = webSettings
-                    return configuration
-                })
-            }).startStandalone()
-        }, error: { e in
-            if case let .generic(errorMessage) = e, let errorMessage = errorMessage {
-                SGLogger.shared.log("SGAPI", errorMessage)
-            }
-        })
-    }, error: { e in
-        if case let .generic(errorMessage) = e, let errorMessage = errorMessage {
-            SGLogger.shared.log("SGAPI", errorMessage)
-        }
-    })
+    _ = context
 }
 
 

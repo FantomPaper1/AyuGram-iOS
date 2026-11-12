@@ -183,15 +183,13 @@ private func ayuScreenEntries(data: PresentationData, privacy: AyuGramPrivacySet
     let security = AyuGramSecurity.shared
     entries.append(.header(id: 690, section: .security, text: s("Ayu.SecuritySection")))
     entries.append(.link(id: 691, section: .security, link: .buildInfo, symbol: security.status == .official ? "checkmark.shield.fill" : "exclamationmark.shield.fill", tint: security.status == .official ? .green : (security.status == .modified ? .red : .gray), title: s("Ayu.BuildStatus"), label: ayuGramBuildStatusTitle(security.status, locale: data.strings.baseLanguageCode)))
-    entries.append(.link(id: 692, section: .security, link: .reportScam, symbol: "exclamationmark.bubble.fill", tint: .orange, title: s("Ayu.ReportScam"), label: ""))
-    entries.append(.toggle(id: 693, section: .security, key: .anonymousStats, symbol: "chart.bar.fill", tint: .indigo, title: s("Ayu.AnonymousStats"), subtitle: nil, value: extra.anonymousStats, enabled: true))
-    entries.append(.footer(id: 694, section: .security, text: s("Ayu.AnonymousStatsInfo")))
+    // HARDENED_BUILD: report-scam and anonymous-stats rows removed.
 
     entries.append(.header(id: 700, section: .support, text: s("Ayu.SupportSection")))
     entries.append(.link(id: 710, section: .support, link: .channel, symbol: "paperplane.fill", tint: .blue, title: s("Ayu.SupportChannel"), label: ""))
     entries.append(.link(id: 720, section: .support, link: .developer, symbol: "person.crop.circle.fill", tint: .purple, title: s("Ayu.SupportDeveloper"), label: ""))
     entries.append(.link(id: 730, section: .support, link: .sessionLog, symbol: "doc.text.fill", tint: .gray, title: s("Ayu.SessionLog"), label: ""))
-    entries.append(.link(id: 740, section: .support, link: .checkUpdates, symbol: "arrow.triangle.2.circlepath", tint: .gray, title: s("Ayu.CheckUpdates"), label: ""))
+    // HARDENED_BUILD: manual update check removed.
     return entries
 }
 

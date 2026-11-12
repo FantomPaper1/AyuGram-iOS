@@ -1529,7 +1529,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         let _ = Task {
                             let primaryContext = await self.getPrimaryContext(anyContext: context.context)
                             SGLogger.shared.log("SGIAP", "Verifying Status \(primaryContext.sharedContext.immediateSGStatus.status) for: \(primaryContext.account.peerId.id._internalGetInt64Value())")
-                            let _ = await self.fetchSGStatus(primaryContext: primaryContext)
+                            // HARDENED_BUILD: automatic Swiftgram status validation disabled.
+
                         }
                     }
                     
@@ -3784,7 +3785,8 @@ extension AppDelegate {
                     SGLogger.shared.log("SGIAP", "Got context for SGIAPHelperPurchaseNotification")
                     let _ = Task {
                         await veryStrongSelf.sendReceiptForVerification(primaryContext: context.context)
-                        await veryStrongSelf.fetchSGStatus(primaryContext: context.context)
+                        // HARDENED_BUILD: automatic Swiftgram status validation disabled.
+
                         
                         SGLogger.shared.log("SGIAP", "Finishing transactions \(transactions.map({ $0.transactionIdentifier ?? "nil" }).joined(separator: ", "))")
                         let defaultPaymentQueue = SKPaymentQueue.default()

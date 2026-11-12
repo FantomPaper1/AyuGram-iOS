@@ -5,24 +5,9 @@ import AccountContext
 import TelegramCore
 
 
+// HARDENED_BUILD: automatic GitHub settings download is disabled.
 public func updateSGGHSettingsInteractivelly(context: AccountContext) {
-    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let locale = presentationData.strings.baseLanguageCode
-    let _ = Task {
-        do {
-            let settings = try await fetchSGGHSettings(locale: locale)
-            let _ = await (context.account.postbox.transaction { transaction in
-                updateAppConfiguration(transaction: transaction, { configuration -> AppConfiguration in
-                    var configuration = configuration
-                    configuration.sgGHSettings = settings
-                    return configuration
-                })
-            }).task()
-        } catch {
-            return
-        }
-
-    }
+    _ = context
 }
 
 
