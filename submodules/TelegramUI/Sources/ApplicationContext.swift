@@ -265,7 +265,15 @@ final class AuthorizedApplicationContext {
             |> map { $0 && $1 }
             |> filter { $0 }
             |> take(1)
-            self.isReady.set(combinedReady)
+            // HARDENED_BUILD: a stalled optional promise must not leave a black window.
+            let readyWatchdog = Signal<Bool, NoError> { subscriber in
+                print("AyuGram: UI ready watchdog fired; revealing the interface")
+                subscriber.putNext(true)
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            self.isReady.set(combinedReady
+            |> timeout(8.0, queue: Queue.mainQueue(), alternate: readyWatchdog))
         } else {
             self.isReady.set(.single(true))
         }
