@@ -1505,7 +1505,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         let text = ayuDiagSummary(diagContext, tag: "t=10")
                         print("AYUDIAG \(text)")
                         Logger.shared.log("AYUDIAG", text)
-                        if let container = diagContext.sharedApplicationContext.mainWindow?.hostView.containerView {
+                        if let container = diagContext.sharedApplicationContext.sharedContext.mainWindow?.hostView.containerView {
                             let overlay = UITextView(frame: container.bounds)
                             overlay.backgroundColor = UIColor.black
                             overlay.textColor = UIColor.green
@@ -3965,9 +3965,13 @@ private final class NavigationBarOverflowMenuReferenceSource: ContextReferenceCo
 }
 
 // HARDENED_DIAG_BEGIN
+private func ayuDiagRect(_ rect: CGRect) -> String {
+    return "[\(rect.origin.x),\(rect.origin.y),\(rect.size.width),\(rect.size.height)]"
+}
+
 private func ayuDiagDescribeView(_ view: UIView, depth: Int, maxDepth: Int) -> String {
     var line = String(repeating: "  ", count: depth)
-    line += "\(type(of: view)) f=\(NSStringFromCGRect(view.frame)) a=\(view.alpha) h=\(view.isHidden) op=\(view.layer.opacity)"
+    line += "\(type(of: view)) f=\(ayuDiagRect(view.frame)) a=\(view.alpha) h=\(view.isHidden) op=\(view.layer.opacity)"
     if let keys = view.layer.animationKeys(), !keys.isEmpty {
         line += " anim=\(keys.joined(separator: ","))"
     }
@@ -3987,23 +3991,23 @@ private func ayuDiagSummary(_ context: AuthorizedApplicationContext, tag: String
     let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
     lines.append("windows=\(windows.count)")
     for window in windows {
-        lines.append("window key=\(window.isKeyWindow) hidden=\(window.isHidden) level=\(window.windowLevel.rawValue) f=\(NSStringFromCGRect(window.frame)) a=\(window.alpha) root=\(window.rootViewController.map { String(describing: type(of: $0)) } ?? "nil")")
+        lines.append("window key=\(window.isKeyWindow) hidden=\(window.isHidden) level=\(window.windowLevel.rawValue) f=\(ayuDiagRect(window.frame)) a=\(window.alpha) root=\(window.rootViewController.map { String(describing: type(of: $0)) } ?? "nil")")
     }
     let root = context.rootController
-    lines.append("root=\(type(of: root)) loaded=\(root.isViewLoaded) f=\(NSStringFromCGRect(root.view.frame)) a=\(root.view.alpha) h=\(root.view.isHidden) op=\(root.view.layer.opacity) super=\(root.view.superview.map { String(describing: type(of: $0)) } ?? "nil")")
-    lines.append("rootDisplay f=\(NSStringFromCGRect(root.displayNode.frame))")
+    lines.append("root=\(type(of: root)) loaded=\(root.isViewLoaded) f=\(ayuDiagRect(root.view.frame)) a=\(root.view.alpha) h=\(root.view.isHidden) op=\(root.view.layer.opacity) super=\(root.view.superview.map { String(describing: type(of: $0)) } ?? "nil")")
+    lines.append("rootDisplay f=\(ayuDiagRect(root.displayNode.frame))")
     if let tabs = root.viewControllers.first as? TabBarController {
-        lines.append("tabs n=\(tabs.controllers.count) sel=\(tabs.selectedIndex) cur=\(tabs.currentController.map { String(describing: type(of: $0)) } ?? "nil") f=\(NSStringFromCGRect(tabs.view.frame)) a=\(tabs.view.alpha) h=\(tabs.view.isHidden)")
+        lines.append("tabs n=\(tabs.controllers.count) sel=\(tabs.selectedIndex) cur=\(tabs.currentController.map { String(describing: type(of: $0)) } ?? "nil") f=\(ayuDiagRect(tabs.view.frame)) a=\(tabs.view.alpha) h=\(tabs.view.isHidden)")
     }
     if let chatList = root.chatListController {
-        lines.append("chatList loaded=\(chatList.isViewLoaded) f=\(NSStringFromCGRect(chatList.view.frame)) a=\(chatList.view.alpha) h=\(chatList.view.isHidden) super=\(chatList.view.superview.map { String(describing: type(of: $0)) } ?? "nil")")
+        lines.append("chatList loaded=\(chatList.isViewLoaded) f=\(ayuDiagRect(chatList.view.frame)) a=\(chatList.view.alpha) h=\(chatList.view.isHidden) super=\(chatList.view.superview.map { String(describing: type(of: $0)) } ?? "nil")")
     }
     if let window = windows.first, let rootView = window.rootViewController?.view {
-        lines.append("windowRootView f=\(NSStringFromCGRect(rootView.frame)) a=\(rootView.alpha) h=\(rootView.isHidden) sub=\(rootView.subviews.count)")
+        lines.append("windowRootView f=\(ayuDiagRect(rootView.frame)) a=\(rootView.alpha) h=\(rootView.isHidden) sub=\(rootView.subviews.count)")
         lines.append(ayuDiagDescribeView(rootView, depth: 0, maxDepth: 3))
     }
-    if let container = context.sharedApplicationContext.mainWindow?.hostView.containerView {
-        lines.append("container f=\(NSStringFromCGRect(container.frame)) bg=\(String(describing: container.backgroundColor)) sub=\(container.subviews.count)")
+    if let container = context.sharedApplicationContext.sharedContext.mainWindow?.hostView.containerView {
+        lines.append("container f=\(ayuDiagRect(container.frame)) bg=\(String(describing: container.backgroundColor)) sub=\(container.subviews.count)")
         lines.append(ayuDiagDescribeView(container, depth: 0, maxDepth: 4))
     }
     return lines.joined(separator: "\n")
